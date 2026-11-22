@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Recíproco",
+  "description": "Compare seguidores e perfis seguidos na sua sessão do Instagram.",
+  "version": "1.0.0",
+  "permissions": ["activeTab", "scripting"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Instagram Recíproco"}
+}
