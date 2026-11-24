@@ -12,7 +12,7 @@
       * { box-sizing: border-box }
       section { background: #fff; border: 1px solid #dbe1eb; border-radius: 16px; padding: 16px;
         box-shadow: 0 12px 40px #0d163330; max-height: calc(100vh - 32px); overflow: auto; }
-      header, li { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 12px }
       h2 { font-size: 18px; margin: 0 }
       p { margin: 12px 0; overflow-wrap: anywhere }
       button, a { font: inherit }
@@ -20,10 +20,6 @@
       #start { background: #253d96; color: white; font-weight: 650; width: 100% }
       #start:disabled { cursor: default; opacity: .65 }
       #close { background: #edf0f6; color: #182032 }
-      input { width: 100%; padding: 9px; font: inherit; border: 1px solid #8894aa; border-radius: 8px }
-      ul { list-style: none; padding: 0; margin: 8px 0 0 }
-      li { padding: 8px 0; border-bottom: 1px solid #e6e9ef }
-      li span { overflow-wrap: anywhere }
       a { color: #253d96; white-space: nowrap }
       details { margin-top: 12px; border-top: 1px solid #e6e9ef; padding-top: 12px }
       summary { color: #253d96; cursor: pointer; font-weight: 650 }
@@ -33,12 +29,6 @@
       <header><h2>Instagram Followers</h2><button id="close" aria-label="Fechar painel">×</button></header>
       <p id="status" role="status">Abra seu próprio perfil no Instagram e inicie a análise.</p>
       <button id="start">Analisar meu perfil</button>
-      <div id="results" hidden>
-        <p id="summary"></p>
-        <input type="search" id="filter" placeholder="Buscar por @usuário" aria-label="Buscar por usuário">
-        <p id="empty" hidden>Nenhum perfil corresponde à busca.</p>
-        <ul id="list"></ul>
-      </div>
       <details>
         <summary>Saiba mais</summary>
         <p>Com o seu perfil aberto, a extensão lê as listas de Seguidores e Seguindo e compara os nomes de usuário. Mantenha a aba aberta até terminar.</p>
@@ -53,7 +43,6 @@
   const status = get("status");
   const start = get("start");
   let controller;
-  let accounts = [];
   let dialogToClose;
   const profilePattern = /^\/[a-z0-9._]{1,30}\/?$/i;
 
@@ -205,7 +194,7 @@
     return null;
   }
 
-  async function collect(link, label, signal, {lastList = false} = {}) {
+  async function collect(link, label, signal) {
     const expected = exactCount(link);
     if (expected === null) {
       throw new Error(`O Instagram não mostrou o total exato de ${label}. Abra o perfil no navegador e tente novamente quando o total estiver disponível.`);
@@ -265,91 +254,109 @@
       await new Promise((resolve) => setTimeout(resolve, 350));
     }
 
-    // Hand the final result to Chrome before closing the Instagram dialog.
-    if (lastList) return users;
-
-    closeDialog(dialog);
-    const closed = () => !dialog.isConnected || !isVisible(dialog);
-    if (!(await waitFor(closed, signal, 2500))) {
-      status.textContent = "Seguidores lidos. Feche a lista no Instagram para continuar automaticamente.";
-      await waitFor(closed, signal, Infinity);
-    }
-    dialogToClose = null;
     return users;
   }
 
-  function render() {
-    const term = get("filter").value.trim().replace(/^@/, "").toLowerCase();
-    const matches = accounts.filter((name) => name.includes(term));
-    get("empty").hidden = matches.length > 0 || !term;
-    const rows = document.createDocumentFragment();
-    for (const name of matches) {
-      const row = document.createElement("li");
-      const username = document.createElement("span");
-      username.textContent = `@${name}`;
-      const link = document.createElement("a");
-      link.href = new URL(`/${name}/`, location.origin).href;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = "Abrir perfil";
-      link.setAttribute("aria-label", `Abrir perfil de @${name} no Instagram`);
-      row.append(username, link);
-      rows.append(row);
+  async function send(type, data = {}) {
+    const response = await chrome.runtime.sendMessage({type, ...data});
+    if (!response || response.error) throw new Error(response?.error || "A extensão perdeu a comunicação com o Chrome.");
+    if (response.idle && type !== "analysis-resume" && type !== "analysis-cancel") {
+      throw new Error("A análise foi encerrada. Mantenha a aba de resultados aberta durante a leitura.");
     }
-    get("list").replaceChildren(rows);
+    return response;
   }
 
-  start.addEventListener("click", async () => {
-    get("results").hidden = true;
-    if (currentDialog()) {
-      status.textContent = "Feche a janela aberta no Instagram e tente de novo.";
-      return;
-    }
-
+  async function analyze(profile, savedFollowers) {
     controller = new AbortController();
     const {signal} = controller;
     start.disabled = true;
+    let running = savedFollowers !== undefined;
     try {
-      const profile = profileOnPage();
-      status.textContent = `Analisando @${profile.user}… mantenha esta aba aberta.`;
-      const followers = await collect(profile.followers, "seguidores", signal);
-      const updatedProfile = profileOnPage();
-      if (updatedProfile.user !== profile.user) throw new Error("Volte ao seu perfil para analisar novamente.");
-      const followingLink = updatedProfile.following;
-      const following = await collect(followingLink, "contas seguidas", signal, {lastList: true});
-      signal.throwIfAborted();
-      accounts = [...following].filter((name) => !followers.has(name)).sort();
-      status.textContent = "Análise concluída. Abrindo o resultado em uma nova aba…";
-      const result = {user: profile.user, followers: followers.size, following: following.size, accounts};
-      const response = await chrome.runtime.sendMessage({type: "open-analysis-result", result}).catch(() => null);
-      if (response?.opened) {
-        status.textContent = "Análise concluída. O resultado foi aberto em outra aba.";
+      if (!running) {
+        await send("analysis-start", {user: profile.user});
+        running = true;
+      }
+      if (signal.aborted) {
+        await send("analysis-cancel");
         return;
       }
-      const totals = `@${profile.user} · ${followers.size} seguidores · ${following.size} seguindo`;
-      status.textContent = `${totals}. O Chrome não abriu a aba de resultados. O resultado está abaixo.`;
-      get("summary").textContent = accounts.length === 0
-        ? "Todas as contas que você segue seguem você de volta."
-        : `${accounts.length} ${accounts.length === 1 ? "perfil não segue" : "perfis não seguem"} você de volta. Abra o perfil para deixar de seguir no Instagram.`;
-      get("filter").value = "";
-      get("filter").hidden = accounts.length === 0;
-      render();
-      get("results").hidden = false;
+      if (savedFollowers === undefined) {
+        const followers = await collect(profile.followers, "seguidores", signal);
+        await send("analysis-followers", {followers: [...followers]});
+        signal.throwIfAborted();
+        const dialog = dialogToClose;
+        if (dialog) {
+          closeDialog(dialog);
+          const closed = () => !dialog.isConnected || !isVisible(dialog);
+          if (!(await waitFor(closed, signal, 2500))) {
+            status.textContent = "Seguidores lidos. Feche a lista no Instagram para continuar automaticamente.";
+            if (!(await waitFor(closed, signal, 45000))) {
+              throw new Error("A lista de seguidores continuou aberta. Feche a janela do Instagram e tente novamente.");
+            }
+          }
+          dialogToClose = null;
+        }
+      }
+
+      const updatedProfile = profileOnPage();
+      if (updatedProfile.user !== profile.user) throw new Error("O perfil mudou durante a análise.");
+      const following = await collect(updatedProfile.following, "contas seguidas", signal);
+      signal.throwIfAborted();
+      status.textContent = "Listas completas. Calculando o resultado na aba da extensão…";
+      await send("analysis-complete", {following: [...following]});
+      status.textContent = "Análise concluída. Veja o resultado na outra aba.";
     } catch (error) {
-      if (!signal.aborted) status.textContent = error.message;
+      if (!signal.aborted) {
+        status.textContent = error.message;
+        if (running) await send("analysis-error", {error: error.message}).catch(() => {});
+      }
     } finally {
       closeDialog(dialogToClose);
       dialogToClose = null;
       controller = null;
       start.disabled = false;
     }
+  }
+
+  start.addEventListener("click", () => {
+    try {
+      if (currentDialog()) throw new Error("Feche a janela aberta no Instagram e tente de novo.");
+      void analyze(profileOnPage());
+    } catch (error) {
+      status.textContent = error.message;
+    }
   });
 
-  get("filter").addEventListener("input", render);
+  async function resumeInterruptedAnalysis() {
+    const {followers} = await send("analysis-resume", {user: pathName(location.pathname)});
+    if (!followers) return;
+    start.disabled = true;
+    status.textContent = "Seguidores recuperados. Aguardando o perfil carregar…";
+    try {
+      const signal = new AbortController().signal;
+      const profile = await waitFor(() => {
+        try {
+          return !currentDialog() && profileOnPage();
+        } catch {
+          return null;
+        }
+      }, signal, 12000);
+      if (!profile) throw new Error("O Instagram não voltou ao seu perfil após a leitura dos seguidores.");
+      await analyze(profile, followers);
+    } catch (error) {
+      status.textContent = error.message;
+      await send("analysis-error", {error: error.message});
+    } finally {
+      start.disabled = false;
+    }
+  }
+
   get("close").addEventListener("click", () => {
     controller?.abort();
+    void send("analysis-cancel").catch(() => {});
     closeDialog(dialogToClose);
     host.remove();
   });
   document.body.append(host);
+  void resumeInterruptedAnalysis().catch((error) => { status.textContent = error.message; });
 })();

@@ -1,10 +1,11 @@
 const get = (id) => document.getElementById(id);
 
-async function showResult() {
-  const tab = await chrome.tabs.getCurrent();
-  const key = `analysis:${tab.id}`;
-  const {[key]: result} = await chrome.storage.session.get(key);
-  if (!result) throw new Error("Resultado indisponível");
+function renderResult(result) {
+  if (result.error || result.phase) {
+    get("results").hidden = true;
+    get("status").textContent = result.error || result.phase;
+    return;
+  }
 
   const {user, followers, following, accounts} = result;
   get("status").textContent = `@${user} · ${followers} seguidores · ${following} seguindo`;
@@ -40,7 +41,20 @@ async function showResult() {
   get("results").hidden = false;
 }
 
-showResult().catch((error) => {
+async function watchResult() {
+  const tab = await chrome.tabs.getCurrent();
+  const key = `analysis:${tab.id}`;
+  let receivedUpdate = false;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "session" || !changes[key]) return;
+    receivedUpdate = true;
+    if (changes[key].newValue) renderResult(changes[key].newValue);
+  });
+  const {[key]: result} = await chrome.storage.session.get(key);
+  if (!receivedUpdate && result) renderResult(result);
+}
+
+watchResult().catch((error) => {
   console.error(error);
   get("status").textContent = "Resultado indisponível. Volte ao seu perfil no Instagram e execute uma nova análise.";
 });
