@@ -137,30 +137,41 @@
 
   function closeDialog(dialog) {
     if (!dialog?.isConnected) return;
-    const controls = [...dialog.querySelectorAll('button, [role="button"]')];
-    const close = controls.find((control) => {
-      const label = control.getAttribute("aria-label") ||
-        control.querySelector("[aria-label]")?.getAttribute("aria-label") ||
-        control.querySelector("svg title")?.textContent;
-      return /^(close|fechar)$/i.test(label?.trim());
-    });
-    close?.click();
-  }
-
-  function readAccounts(dialog, users) {
-    for (const anchor of dialog.querySelectorAll("a[href]")) {
-      const path = localPath(anchor);
-      if (!profilePattern.test(path)) continue;
-      const name = pathName(path);
-      if (anchor.textContent.trim().replace(/^@/, "").toLowerCase() === name) users.add(name);
+    const labels = dialog.querySelectorAll("[aria-label], [title], svg title");
+    for (const element of labels) {
+      const label = element.getAttribute("aria-label") || element.getAttribute("title") ||
+        element.textContent;
+      if (!/^(close(?: dialog)?|fechar(?: janela)?)$/i.test(label.trim())) continue;
+      const control = element.closest('button, [role="button"], [tabindex="0"]');
+      const target = control || (element instanceof HTMLElement ? element : element.closest("svg")?.parentElement);
+      if (!target || !dialog.contains(target) || !isVisible(target)) continue;
+      target.click();
+      return;
     }
   }
 
-  function findScroller(dialog) {
-    return [dialog, ...dialog.querySelectorAll("div, section, ul")].find((node) =>
-      node.clientHeight > 0 && node.scrollHeight > node.clientHeight + 2 &&
-      /auto|scroll|overlay/.test(getComputedStyle(node).overflowY)
-    );
+  function accountLinks(dialog) {
+    return [...dialog.querySelectorAll("a[href]")].filter((anchor) => profilePattern.test(localPath(anchor)));
+  }
+
+  function readAccounts(links, users) {
+    for (const anchor of links) {
+      const name = pathName(localPath(anchor));
+      if (controlLabels(anchor).some((label) => label.replace(/^@/, "").toLowerCase() === name)) {
+        users.add(name);
+      }
+    }
+  }
+
+  function findScroller(dialog, links) {
+    const scrollable = (node) => node.clientHeight > 0 && node.scrollHeight > node.clientHeight + 2 &&
+      /auto|scroll|overlay/.test(getComputedStyle(node).overflowY);
+    for (const link of links) {
+      for (let node = link.parentElement; node && node !== dialog; node = node.parentElement) {
+        if (scrollable(node)) return node;
+      }
+    }
+    return [dialog, ...dialog.querySelectorAll("div, section, ul")].find(scrollable);
   }
 
   async function waitFor(check, signal, timeout = 9000) {
@@ -174,7 +185,7 @@
     return null;
   }
 
-  async function collect(link, label, signal) {
+  async function collect(link, label, signal, {lastList = false} = {}) {
     const expected = exactCount(link);
     if (expected === null) {
       throw new Error(`O Instagram não mostrou o total exato de ${label}. Abra o perfil no navegador e tente novamente quando o total estiver disponível.`);
@@ -196,14 +207,15 @@
       if (!dialog.isConnected || !isVisible(dialog)) {
         throw new Error(`A lista de ${label} foi fechada durante a leitura.`);
       }
-      readAccounts(dialog, users);
+      const links = accountLinks(dialog);
+      readAccounts(links, users);
       status.textContent = `Lendo ${label}… ${users.size} de ${expected}.`;
       if (users.size === expected) break;
       if (users.size > expected) {
         throw new Error(`O total de ${label} mudou ou não corresponde à lista. Atualize seu perfil e tente de novo.`);
       }
 
-      const scroller = findScroller(dialog);
+      const scroller = findScroller(dialog, links);
       const top = scroller?.scrollTop ?? 0;
       const height = scroller?.scrollHeight ?? 0;
       if (users.size !== lastCount || top !== lastTop || height !== lastHeight) {
@@ -219,8 +231,15 @@
     }
 
     closeDialog(dialog);
-    if (!(await waitFor(() => !dialog.isConnected || !isVisible(dialog), signal, 2500))) {
-      throw new Error("Feche a lista do Instagram e inicie a análise novamente.");
+    const closed = () => !dialog.isConnected || !isVisible(dialog);
+    if (lastList) {
+      // The comparison only needs the collected data, even if Instagram leaves its modal open.
+      dialogToClose = null;
+      return users;
+    }
+    if (!(await waitFor(closed, signal, 2500))) {
+      status.textContent = "Seguidores lidos. Feche a lista no Instagram para continuar automaticamente.";
+      await waitFor(closed, signal, Infinity);
     }
     dialogToClose = null;
     return users;
@@ -264,10 +283,11 @@
       const updatedProfile = profileOnPage();
       if (updatedProfile.user !== profile.user) throw new Error("Volte ao seu perfil para analisar novamente.");
       const followingLink = updatedProfile.following;
-      const following = await collect(followingLink, "contas seguidas", signal);
+      const following = await collect(followingLink, "contas seguidas", signal, {lastList: true});
       signal.throwIfAborted();
       accounts = [...following].filter((name) => !followers.has(name)).sort();
-      status.textContent = `@${profile.user} · ${followers.size} seguidores · ${following.size} seguindo`;
+      const totals = `@${profile.user} · ${followers.size} seguidores · ${following.size} seguindo`;
+      status.textContent = currentDialog() ? `${totals}. Análise concluída. Feche a lista do Instagram se ela estiver cobrindo o resultado.` : totals;
       get("summary").textContent = accounts.length === 0
         ? "Todas as contas que você segue seguem você de volta."
         : `${accounts.length} ${accounts.length === 1 ? "perfil não segue" : "perfis não seguem"} você de volta. Abra o perfil para deixar de seguir no Instagram.`;
