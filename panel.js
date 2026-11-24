@@ -71,47 +71,61 @@
       getComputedStyle(element).visibility === "visible";
   }
 
+  const followerWords = "seguidor(?:es)?|followers?";
+  const followingWords = "seguindo|following";
+  const countWords = new RegExp(`^(?:${followerWords}|${followingWords})\\s*|\\s*(?:${followerWords}|${followingWords})$`, "gi");
+
+  function controlLabels(control) {
+    return [control.getAttribute("aria-label"), control.innerText ?? control.textContent]
+      .filter(Boolean).map((label) => label.trim());
+  }
+
   function profileOnPage() {
     const path = location.pathname;
-    if (!profilePattern.test(path)) return null;
-    const user = pathName(path);
-    const main = document.querySelector('main, [role="main"]');
-    if (!main) return null;
-    const profileLinks = [...main.querySelectorAll("a[href]")].filter(isVisible);
-    const listLink = (kind) => profileLinks.find((link) =>
-      localPath(link).toLowerCase().replace(/\/$/, "") === `/${user}/${kind}`
-    );
-    const followers = listLink("followers");
-    const following = listLink("following");
-    if (!followers || !following) return null;
+    const profileError = "Abra seu próprio perfil pelo menu Perfil do Instagram e tente novamente.";
+    if (!profilePattern.test(path)) throw new Error(profileError);
 
-    const ownNavigation = [...document.querySelectorAll("a[href]")]
-      .filter((link) => !main.contains(link) && isVisible(link) && profilePattern.test(localPath(link)))
-      .find((link) => {
-        const labels = [link.getAttribute("aria-label"), link.textContent,
-          ...[...link.querySelectorAll("[aria-label], img[alt], svg title")].map(
-            (node) => node.getAttribute("aria-label") || node.getAttribute("alt") || node.textContent
-          )];
-        return labels.some((label) => /^(perfil|profile)$/i.test(label?.trim()) ||
-          /profile picture|foto do perfil/i.test(label || ""));
-      });
-    const editProfile = profileLinks.some((link) => /^\/accounts\/edit\/?$/.test(localPath(link))) ||
-      [...main.querySelectorAll('header button, header [role="button"]')].some((button) =>
-        isVisible(button) && /^(editar perfil|edit profile)$/i.test(button.textContent.trim())
+    const user = pathName(path);
+    const links = [...document.querySelectorAll("a[href]")].filter(isVisible);
+    const controls = [...document.querySelectorAll('button, [role="button"], [role="link"], [tabindex="0"]')].filter(isVisible);
+    const editProfile = links.some((link) => /^\/accounts\/edit\/?$/.test(localPath(link))) ||
+      controls.some((control) => controlLabels(control).some((label) => /^(editar perfil|edit profile)$/i.test(label)));
+    const ownNavigation = links.some((link) => {
+      if (!profilePattern.test(localPath(link)) || pathName(localPath(link)) !== user) return false;
+      const labels = [...controlLabels(link),
+        ...[...link.querySelectorAll("[aria-label], svg title")].map(
+          (node) => node.getAttribute("aria-label") || node.textContent
+        )];
+      return labels.some((label) => /^(perfil|profile)$/i.test(label.trim()));
+    });
+    if (!editProfile && !ownNavigation) throw new Error(profileError);
+
+    function findList(kind, words) {
+      const link = links.find((candidate) =>
+        localPath(candidate).toLowerCase().replace(/\/$/, "") === `/${user}/${kind}`
       );
-    if (!editProfile && (!ownNavigation || pathName(localPath(ownNavigation)) !== user)) return null;
+      if (link) return link;
+
+      const labelPattern = new RegExp(`^(?:[\\d.,\\s]+(?:[kmb]|mil|mi|bi)?\\s*(?:${words})|(?:${words})\\s*[\\d.,\\s]+(?:[kmb]|mil|mi|bi)?)$`, "i");
+      return controls.find((control) => controlLabels(control).some((label) => labelPattern.test(label)));
+    }
+
+    const followers = findList("followers", followerWords);
+    const following = findList("following", followingWords);
+    if (!followers || !following) {
+      throw new Error("Seu perfil foi reconhecido, mas a extensão não encontrou os controles de Seguidores e Seguindo. Recarregue a página e tente novamente.");
+    }
     return {user, followers, following};
   }
 
-  function exactCount(link) {
-    const titleValues = [link, ...link.querySelectorAll("[title]")].map(
+  function exactCount(control) {
+    const titleValues = [control, ...control.querySelectorAll("[title]")].map(
       (node) => node.getAttribute("title")?.trim()
     );
-    const countWords = /^(?:seguidor(?:es)?|seguindo|followers?|following)\s*|\s*(?:seguidor(?:es)?|seguindo|followers?|following)$/gi;
-    const visibleCount = link.textContent.trim().replace(countWords, "");
-    for (const value of [...titleValues, visibleCount]) {
-      if (!value || !/^(?:\d+|\d{1,3}(?:[.,\u00a0\u202f ]\d{3})+)$/.test(value)) continue;
-      const count = Number(value.replace(/\D/g, ""));
+    for (const value of [...titleValues, ...controlLabels(control)]) {
+      const number = value?.replace(countWords, "").trim();
+      if (!number || !/^(?:\d+|\d{1,3}(?:[.,\u00a0\u202f ]\d{3})+)$/.test(number)) continue;
+      const count = Number(number.replace(/\D/g, ""));
       if (Number.isSafeInteger(count)) return count;
     }
     return null;
@@ -235,11 +249,6 @@
 
   start.addEventListener("click", async () => {
     get("results").hidden = true;
-    const profile = profileOnPage();
-    if (!profile) {
-      status.textContent = "Abra seu próprio perfil pelo menu Perfil do Instagram. Se a página recarregar, clique novamente no ícone da extensão.";
-      return;
-    }
     if (currentDialog()) {
       status.textContent = "Feche a janela aberta no Instagram e tente de novo.";
       return;
@@ -248,11 +257,13 @@
     controller = new AbortController();
     const {signal} = controller;
     start.disabled = true;
-    status.textContent = `Analisando @${profile.user}… mantenha esta aba aberta.`;
     try {
+      const profile = profileOnPage();
+      status.textContent = `Analisando @${profile.user}… mantenha esta aba aberta.`;
       const followers = await collect(profile.followers, "seguidores", signal);
-      const followingLink = profileOnPage()?.following;
-      if (!followingLink) throw new Error("Volte ao seu perfil para analisar novamente.");
+      const updatedProfile = profileOnPage();
+      if (updatedProfile.user !== profile.user) throw new Error("Volte ao seu perfil para analisar novamente.");
+      const followingLink = updatedProfile.following;
       const following = await collect(followingLink, "contas seguidas", signal);
       signal.throwIfAborted();
       accounts = [...following].filter((name) => !followers.has(name)).sort();
