@@ -11,7 +11,15 @@ Instagram Followers é uma extensão para Chrome que mostra quais contas você s
 não seguem você de volta. É só abrir seu perfil e clicar em **Analisar meu perfil**. A extensão
 usa a sessão já aberta, sem pedir senha ou importar um ZIP.
 
+<p align="center">
+  <img src="assets/demo.webp" alt="Demonstração com perfis fictícios: a extensão lê seguidores e contas seguidas, encontra três perfis e filtra a lista pelo nome de usuário." width="420">
+</p>
+
 ## O que aparece na lista
+
+<p align="center">
+  <img src="assets/telas.png" alt="Três telas do painel: início da análise, lista de perfis e busca por nome de usuário." width="100%">
+</p>
 
 O painel mostra os perfis que não seguem você de volta e permite buscar pelo `@usuário`. Para revisar
 uma conta, clique em **Abrir perfil**. Se quiser deixar de seguir, confirme a ação no próprio
