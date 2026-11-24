@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/capa.png" alt="Instagram Followers. Veja quem você segue e não segue você de volta." width="100%">
+  <img src="assets/capa-transparente.png" alt="Instagram Followers. Veja quem você segue e não segue você de volta." width="100%">
 </p>
 
 <p align="center">
