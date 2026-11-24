@@ -154,10 +154,28 @@
     return [...dialog.querySelectorAll("a[href]")].filter((anchor) => profilePattern.test(localPath(anchor)));
   }
 
-  function readAccounts(links, users) {
+  function accountRow(anchor, dialog, name) {
+    const action = /^(seguindo|seguir|remover|following|follow(?: back)?|remove)$/i;
+    for (let row = anchor.parentElement; row && row !== dialog; row = row.parentElement) {
+      const profiles = accountLinks(row);
+      if (profiles.some((link) => pathName(localPath(link)) !== name)) return false;
+      const buttons = [...row.querySelectorAll('button, [role="button"]')];
+      if (buttons.some((button) => button !== anchor && controlLabels(button).some((label) => action.test(label)))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function readAccounts(dialog, links, users) {
     for (const anchor of links) {
       const name = pathName(localPath(anchor));
-      if (controlLabels(anchor).some((label) => label.replace(/^@/, "").toLowerCase() === name)) {
+      if (users.has(name)) continue;
+      const labels = [...controlLabels(anchor), ...[...anchor.querySelectorAll("span[dir]")].map(
+        (element) => element.textContent.trim()
+      )];
+      if (labels.some((label) => label.replace(/^@/, "").toLowerCase() === name) ||
+          accountRow(anchor, dialog, name)) {
         users.add(name);
       }
     }
@@ -166,11 +184,13 @@
   function findScroller(dialog, links) {
     const scrollable = (node) => node.clientHeight > 0 && node.scrollHeight > node.clientHeight + 2 &&
       /auto|scroll|overlay/.test(getComputedStyle(node).overflowY);
+    const candidates = new Map();
     for (const link of links) {
-      for (let node = link.parentElement; node && node !== dialog; node = node.parentElement) {
-        if (scrollable(node)) return node;
+      for (let node = link.parentElement; node && dialog.contains(node); node = node.parentElement) {
+        if (scrollable(node)) candidates.set(node, (candidates.get(node) ?? 0) + 1);
       }
     }
+    if (candidates.size) return [...candidates].sort((a, b) => b[1] - a[1])[0][0];
     return [dialog, ...dialog.querySelectorAll("div, section, ul")].find(scrollable);
   }
 
@@ -198,7 +218,8 @@
     dialogToClose = dialog;
     const users = new Set();
     let lastCount = -1;
-    let lastTop = -1;
+    let furthestTop = -1;
+    let retryAt = 4000;
     let lastHeight = -1;
     let lastProgress = performance.now();
 
@@ -208,7 +229,7 @@
         throw new Error(`A lista de ${label} foi fechada durante a leitura.`);
       }
       const links = accountLinks(dialog);
-      readAccounts(links, users);
+      readAccounts(dialog, links, users);
       status.textContent = `Lendo ${label}… ${users.size} de ${expected}.`;
       if (users.size === expected) break;
       if (users.size > expected) {
@@ -218,15 +239,29 @@
       const scroller = findScroller(dialog, links);
       const top = scroller?.scrollTop ?? 0;
       const height = scroller?.scrollHeight ?? 0;
-      if (users.size !== lastCount || top !== lastTop || height !== lastHeight) {
+      if (users.size !== lastCount || top > furthestTop || height !== lastHeight) {
         lastProgress = performance.now();
         lastCount = users.size;
-        lastTop = top;
+        furthestTop = height !== lastHeight ? top : Math.max(furthestTop, top);
         lastHeight = height;
-      } else if (performance.now() - lastProgress > 12000) {
-        throw new Error(`Leitura incompleta de ${label} (${users.size} de ${expected}). Tente novamente com a aba do Instagram aberta.`);
+        retryAt = 4000;
       }
-      scroller?.scrollBy({top: Math.max(1, Math.floor(scroller.clientHeight / 2)), behavior: "instant"});
+
+      const idle = performance.now() - lastProgress;
+      if (idle > 20000) {
+        throw new Error(`Leitura incompleta de ${label} (${users.size} de ${expected}). O total exibido pelo Instagram não bateu com a lista que carregou.`);
+      }
+      if (scroller) {
+        const step = Math.max(1, Math.floor(scroller.clientHeight / 2));
+        const atBottom = top + scroller.clientHeight >= height - 2;
+        if (atBottom && idle >= retryAt) {
+          // Leave the bottom briefly so another scroll can trigger lazy loading.
+          scroller.scrollBy({top: -step, behavior: "instant"});
+          retryAt += 5000;
+        } else if (!atBottom) {
+          scroller.scrollBy({top: step, behavior: "instant"});
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 350));
     }
 
