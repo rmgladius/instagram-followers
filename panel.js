@@ -1,5 +1,5 @@
 (() => {
-  const panelId = "instagram-reciproco-extension";
+  const panelId = "instagram-followers-extension";
   if (document.getElementById(panelId)) return;
 
   const host = document.createElement("div");
@@ -25,9 +25,12 @@
       li { padding: 8px 0; border-bottom: 1px solid #e6e9ef }
       li span { overflow-wrap: anywhere }
       a { color: #253d96; white-space: nowrap }
+      details { margin-top: 12px; border-top: 1px solid #e6e9ef; padding-top: 12px }
+      summary { color: #253d96; cursor: pointer; font-weight: 650 }
+      details p { margin: 8px 0 }
     </style>
-    <section aria-label="Instagram Recíproco">
-      <header><h2>Instagram Recíproco</h2><button id="close" aria-label="Fechar painel">×</button></header>
+    <section aria-label="Instagram Followers">
+      <header><h2>Instagram Followers</h2><button id="close" aria-label="Fechar painel">×</button></header>
       <p id="status" role="status">Abra seu próprio perfil no Instagram e inicie a análise.</p>
       <button id="start">Analisar meu perfil</button>
       <div id="results" hidden>
@@ -36,6 +39,14 @@
         <p id="empty" hidden>Nenhum perfil corresponde à busca.</p>
         <ul id="list"></ul>
       </div>
+      <details>
+        <summary>Saiba mais</summary>
+        <p>Com o seu perfil aberto, a extensão lê as listas de Seguidores e Seguindo e compara os nomes de usuário. Mantenha a aba aberta até terminar.</p>
+        <p>A análise usa sua sessão atual e roda no navegador, sem pedir senha ou enviar suas listas a um servidor. O resultado é descartado ao fechar o painel ou recarregar a página.</p>
+        <p>Se alguma lista não carregar por inteiro ou o Instagram exibir apenas um total abreviado, a extensão avisa e não mostra resultados parciais. Se a leitura parar, recarregue seu perfil e tente de novo.</p>
+        <p>Para deixar de seguir alguém, abra o perfil pelo resultado e confirme a ação no próprio Instagram.</p>
+        <a href="https://github.com/rmgladius/instagram-followers#saiba-mais" target="_blank" rel="noopener noreferrer">Ver documentação no GitHub</a>
+      </details>
     </section>`;
 
   const get = (id) => shadow.getElementById(id);

@@ -1,9 +1,28 @@
 {
   "manifest_version": 3,
-  "name": "Instagram Recíproco",
-  "description": "Compare seguidores e perfis seguidos na sua sessão do Instagram.",
-  "version": "1.0.0",
-  "permissions": ["activeTab", "scripting"],
-  "background": {"service_worker": "background.js"},
-  "action": {"default_title": "Instagram Recíproco"}
+  "name": "Instagram Followers",
+  "description": "Veja quem você segue no Instagram e não segue você de volta. A análise roda localmente no Chrome.",
+  "version": "1.0.1",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Instagram Followers",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "24": "assets/icon-24.png",
+      "32": "assets/icon-32.png"
+    }
+  },
+  "homepage_url": "https://github.com/rmgladius/instagram-followers#saiba-mais",
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  }
 }
