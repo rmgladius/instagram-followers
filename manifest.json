@@ -2,10 +2,11 @@
   "manifest_version": 3,
   "name": "Instagram Followers",
   "description": "Veja quem você segue no Instagram e não segue você de volta. A análise roda localmente no Chrome.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"

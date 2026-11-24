@@ -42,7 +42,7 @@
       <details>
         <summary>Saiba mais</summary>
         <p>Com o seu perfil aberto, a extensão lê as listas de Seguidores e Seguindo e compara os nomes de usuário. Mantenha a aba aberta até terminar.</p>
-        <p>A análise usa sua sessão atual e roda no navegador, sem pedir senha ou enviar suas listas a um servidor. O resultado é descartado ao fechar o painel ou recarregar a página.</p>
+        <p>A análise usa sua sessão atual e roda no navegador, sem pedir senha ou enviar suas listas a um servidor. O resultado abre em uma aba da extensão e é descartado ao fechar essa aba ou o Chrome.</p>
         <p>Se alguma lista não carregar por inteiro ou o Instagram exibir apenas um total abreviado, a extensão avisa e não mostra resultados parciais. Se a leitura parar, recarregue seu perfil e tente de novo.</p>
         <p>Para deixar de seguir alguém, abra o perfil pelo resultado e confirme a ação no próprio Instagram.</p>
         <a href="https://github.com/rmgladius/instagram-followers#saiba-mais" target="_blank" rel="noopener noreferrer">Ver documentação no GitHub</a>
@@ -265,13 +265,11 @@
       await new Promise((resolve) => setTimeout(resolve, 350));
     }
 
+    // Hand the final result to Chrome before closing the Instagram dialog.
+    if (lastList) return users;
+
     closeDialog(dialog);
     const closed = () => !dialog.isConnected || !isVisible(dialog);
-    if (lastList) {
-      // The comparison only needs the collected data, even if Instagram leaves its modal open.
-      dialogToClose = null;
-      return users;
-    }
     if (!(await waitFor(closed, signal, 2500))) {
       status.textContent = "Seguidores lidos. Feche a lista no Instagram para continuar automaticamente.";
       await waitFor(closed, signal, Infinity);
@@ -321,8 +319,15 @@
       const following = await collect(followingLink, "contas seguidas", signal, {lastList: true});
       signal.throwIfAborted();
       accounts = [...following].filter((name) => !followers.has(name)).sort();
+      status.textContent = "Análise concluída. Abrindo o resultado em uma nova aba…";
+      const result = {user: profile.user, followers: followers.size, following: following.size, accounts};
+      const response = await chrome.runtime.sendMessage({type: "open-analysis-result", result}).catch(() => null);
+      if (response?.opened) {
+        status.textContent = "Análise concluída. O resultado foi aberto em outra aba.";
+        return;
+      }
       const totals = `@${profile.user} · ${followers.size} seguidores · ${following.size} seguindo`;
-      status.textContent = currentDialog() ? `${totals}. Análise concluída. Feche a lista do Instagram se ela estiver cobrindo o resultado.` : totals;
+      status.textContent = `${totals}. O Chrome não abriu a aba de resultados. O resultado está abaixo.`;
       get("summary").textContent = accounts.length === 0
         ? "Todas as contas que você segue seguem você de volta."
         : `${accounts.length} ${accounts.length === 1 ? "perfil não segue" : "perfis não seguem"} você de volta. Abra o perfil para deixar de seguir no Instagram.`;

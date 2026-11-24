@@ -21,7 +21,7 @@ usa a sessão já aberta, sem pedir senha ou importar um ZIP.
   <img src="assets/telas.png" alt="Três telas do painel: início da análise, lista de perfis e busca por nome de usuário." width="100%">
 </p>
 
-O painel mostra os perfis que não seguem você de volta e permite buscar pelo `@usuário`. Para revisar
+A aba de resultados mostra os perfis que não seguem você de volta e permite buscar pelo `@usuário`. Para revisar
 uma conta, clique em **Abrir perfil**. Se quiser deixar de seguir, confirme a ação no próprio
 Instagram. Rode a análise de novo para conferir mudanças desde a última leitura.
 
@@ -46,8 +46,8 @@ Instagram.
 
 A permissão `activeTab` dá acesso temporário à aba quando você clica no ícone. A permissão
 `scripting` permite abrir o painel e ler as listas na página. A análise roda no navegador e seus
-dados ficam em memória até você fechar o painel ou recarregar a página. A extensão não envia as
-listas a servidores.
+resultados ficam na memória do Chrome (`storage.session`) até você fechar a aba de resultados ou
+encerrar a sessão do navegador. A extensão não envia as listas a servidores.
 
 JavaScript · HTML · CSS · Chrome Extensions Manifest V3
 

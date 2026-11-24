@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resultado | Instagram Followers</title>
+  <link rel="icon" href="assets/icon-32.png">
+  <style>
+    :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #182032; background: #f2f3fa }
+    * { box-sizing: border-box }
+    body { margin: 0; padding: 32px 16px }
+    main { max-width: 720px; margin: auto; padding: clamp(20px, 6vw, 40px); background: white;
+      border: 1px solid #dbe1eb; border-radius: 20px }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 28px }
+    h1 { font-size: 1.125rem; margin: 0 }
+    h2 { margin: 0 0 8px; line-height: 1.25 }
+    p { margin: 0 0 16px }
+    label { display: block; font-weight: 600; margin: 20px 0 6px }
+    input { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid #8894aa; border-radius: 8px }
+    ul { list-style: none; margin: 14px 0 0; padding: 0 }
+    li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid #e6e9ef }
+    li span { overflow-wrap: anywhere }
+    a { color: #253d96; white-space: nowrap }
+  </style>
+  <script src="results.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><img src="assets/icon-48.png" width="36" height="36" alt=""><h1>Instagram Followers</h1></header>
+    <h2>Resultado da análise</h2>
+    <p id="status" role="status">Carregando resultado…</p>
+    <div id="results" hidden>
+      <p id="summary"></p>
+      <div id="search" hidden>
+        <label for="filter">Buscar por @usuário</label>
+        <input id="filter" type="search" spellcheck="false">
+        <p id="empty" role="status" hidden>Nenhum perfil corresponde à busca.</p>
+      </div>
+      <ul id="list"></ul>
+    </div>
+  </main>
+</body>
+</html>
