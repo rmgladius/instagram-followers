@@ -81,6 +81,9 @@ async function handleAnalysis(message, sender) {
         [resultKey(run.resultTabId)]: {phase: "Seguidores lidos. Lendo quem você segue na aba do Instagram…"}
       });
       break;
+    case "analysis-progress":
+      await session.set({[resultKey(run.resultTabId)]: {phase: message.phase}});
+      break;
     case "analysis-complete": {
       const following = message.following;
       const followers = new Set(run.followers);

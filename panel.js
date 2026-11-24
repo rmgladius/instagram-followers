@@ -148,6 +148,8 @@
     for (let row = anchor.parentElement; row && row !== dialog; row = row.parentElement) {
       const profiles = accountLinks(row);
       if (profiles.some((link) => pathName(localPath(link)) !== name)) return false;
+      // Some rows link the avatar and display name separately to the same profile.
+      if (profiles.length > 1 && profiles.some((link) => link.querySelector("img"))) return true;
       const buttons = [...row.querySelectorAll('button, [role="button"]')];
       if (buttons.some((button) => button !== anchor && controlLabels(button).some((label) => action.test(label)))) {
         return true;
@@ -211,6 +213,8 @@
     let retryAt = 4000;
     let lastHeight = -1;
     let lastProgress = performance.now();
+    let manualScroll = false;
+    const profileURLs = new Set();
 
     while (true) {
       signal.throwIfAborted();
@@ -218,8 +222,12 @@
         throw new Error(`A lista de ${label} foi fechada durante a leitura.`);
       }
       const links = accountLinks(dialog);
+      for (const anchor of links) profileURLs.add(pathName(localPath(anchor)));
       readAccounts(dialog, links, users);
-      status.textContent = `Lendo ${label}… ${users.size} de ${expected}.`;
+      const progress = `${users.size} de ${expected} contas lidas.`;
+      status.textContent = manualScroll
+        ? `${progress} Na lista do Instagram, suba um pouco e depois role devagar até o fim. A leitura continua enquanto você rola.`
+        : `Lendo ${label}… ${progress}`;
       if (users.size === expected) break;
       if (users.size > expected) {
         throw new Error(`O total de ${label} mudou ou não corresponde à lista. Atualize seu perfil e tente de novo.`);
@@ -237,10 +245,16 @@
       }
 
       const idle = performance.now() - lastProgress;
-      if (idle > 20000) {
-        throw new Error(`Leitura incompleta de ${label} (${users.size} de ${expected}). O total exibido pelo Instagram não bateu com a lista que carregou.`);
+      if (!manualScroll && idle > 12000) {
+        manualScroll = true;
+        lastProgress = performance.now();
+        await send("analysis-progress", {
+          phase: `${progress} Volte à aba do Instagram e role a lista de ${label} até o fim. As contas já lidas foram mantidas.`
+        });
+      } else if (manualScroll && idle > 90000) {
+        throw new Error(`Leitura incompleta de ${label} (${users.size} de ${expected}). O Instagram mostrou ${profileURLs.size} perfis distintos na lista, dos quais ${users.size} puderam ser confirmados.`);
       }
-      if (scroller) {
+      if (scroller && !manualScroll) {
         const step = Math.max(1, Math.floor(scroller.clientHeight / 2));
         const atBottom = top + scroller.clientHeight >= height - 2;
         if (atBottom && idle >= retryAt) {

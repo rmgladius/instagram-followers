@@ -58,7 +58,8 @@ JavaScript · HTML · CSS · Chrome Extensions Manifest V3
 ### Se a análise não terminar
 
 - Confirme que está no seu próprio perfil e feche outras janelas abertas na página.
-- Se uma lista parar de carregar, recarregue o perfil, reabra a extensão e tente de novo.
+- Se o painel pedir ajuda para carregar a lista, role o modal do Instagram lentamente até o fim.
+  A extensão continua lendo e mantém as contas que já conferiu.
 - Se o Instagram mostrar apenas um total abreviado ou mudar a forma de exibir as listas, a extensão
   pode não conseguir conferir a leitura. Nesse caso, ela avisa e omite os resultados parciais.
 
